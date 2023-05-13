@@ -1,0 +1,72 @@
+tSTRING "'"[^']*"'"
+tKEYWORDS \"(Get|Set|Function|Print|For|If|Return)\"
+tIDENT \"[a-zA-Z_][a-zA-Z0-9_]*\"
+tNUM "-"?[0-9]+"."?[0-9]+|"-"?[0-9]+
+%{
+ #include<stdio.h>
+ #include<stdlib.h>
+ int noLines = 1;
+%}
+
+%%
+
+\n noLines++;
+
+{tNUM} {
+float f = atof(yytext);
+int i = atoi(yytext);
+if(i == f){
+	if(strchr(yytext,'.') != NULL){
+		printf("%d tNUM (%s) (%.1f)\n",noLines,yytext,f);
+	}
+	else{
+		if(i == 0) printf("%d tNUM (%s) (%.0f)\n",noLines,yytext,f);
+		else printf("%d tNUM (%s) (%d)\n",noLines,yytext,i);
+	}
+}
+else{
+	printf("%d tNUM (%s) (%g)\n",noLines,yytext,f);
+}
+}
+{tKEYWORDS} {
+int i;
+for(i = 2; yytext[i] != '\"'; i++){
+ yytext[i] = yytext[i] - 32;
+}
+char *KEYW = yytext+1;
+KEYW[yyleng-2] = '\0';
+printf("%d t%s\n",noLines,KEYW);
+}
+{tSTRING} {
+char *STR = yytext+1;
+STR[yyleng-2] = '\0';
+printf("%d tSTRING (%s)\n",noLines,STR);
+if(strchr(yytext,'\n') != NULL){noLines ++;}
+}
+{tIDENT} {
+char *IDENT = yytext+1;
+IDENT[yyleng-2] = '\0';
+printf("%d tIDENT (%s)\n",noLines,IDENT);
+}
+"," printf("%d tCOMMA\n",noLines);
+"\"==\"" printf("%d tEQUALITY\n",noLines);
+"[" printf("%d tLBRAC\n",noLines);
+"]" printf("%d tRBRAC\n",noLines);
+"\"--\"" printf("%d tDEC\n",noLines);
+"\"-\"" printf("%d tMINUS\n",noLines);
+"\"/\"" printf("%d tDIV\n",noLines);
+"\"++\"" printf("%d tINC\n",noLines);
+"\"+\"" printf("%d tPLUS\n",noLines);
+"\"*\"" printf("%d tMUL\n",noLines);
+"\">\"" printf("%d tGT\n",noLines);
+"\">=\"" printf("%d tGEQ\n",noLines);
+"\"<=\"" printf("%d tLEQ\n",noLines);
+"\"<\"" printf("%d tLT\n",noLines);
+[\t ] ;
+. printf("%d ILLEGAL CHARACTER (%s)\n",noLines,yytext);
+
+%%
+int main(){
+yylex();
+return(0);
+}
