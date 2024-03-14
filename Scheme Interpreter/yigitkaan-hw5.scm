@@ -1,0 +1,225 @@
+(define define-expr?
+    (lambda (e)
+      (and
+        (list? e)
+        (= (length e) 3)
+        (eq? (car e) 'define)
+        (symbol?(cadr e))
+         )
+    )
+)
+
+(define get-operator
+    (lambda (sym env)
+           (cond
+             ((eq? sym '+) +)
+             ((eq? sym '*) *)
+             ((eq? sym '-) -)
+             ((eq? sym '/) /)
+             (else (display "ERROR\n") (REPL env))
+            )
+    )
+)
+
+(define get-value
+    (lambda (var env-before env-new)
+      (cond
+         ((null? env-new) (display "ERROR\n") (REPL env-before))
+         ((eq? var (caar env-new)) (cdar env-new))
+         (else (get-value var env-before (cdr env-new)))
+       )
+    )
+)
+
+(define if-stmt?
+    (lambda (e)
+        (and
+            (list? e)
+            (equal? (car e) 'if)
+            (= (length e) 4))
+     )
+)
+
+(define extend-env
+    (lambda (var val env-before)
+         (cons (cons var val) env-before)
+    )
+)
+
+(define cond-check?
+    (lambda (e)
+        (cond
+            ((null? e) #f)
+            ((and (list? (car e)) (= (length (car e)) 2))
+             (if (eq? (caar e) 'else)
+                  (if (null? (cdr e))
+                    #t
+                    #f)
+                   (cond-check? (cdr e))
+                )
+            )
+            (else #f)
+         )
+     )
+)
+
+(define cond-stmt?
+    (lambda (e)
+     (and
+        (list? e)
+        (eq? 'cond (car e))
+        (> (length e) 2)
+        (cond-check? (cdr e))
+      )
+     )
+ )
+
+(define let-check?
+    (lambda (e)
+     (cond
+        ((list? e)
+         (if (null? e)
+            #t
+            (if (= (length (car e)) 2)
+                (let-check? (cdr e))
+                #f)
+          )
+         )
+         (else #f)
+      )
+     )
+)
+
+(define let-stmt?
+    (lambda (e)
+     (and
+        (list? e)
+        (eq? 'let (car e))
+        (= (length e) 3)
+        (let-check? (cadr e))
+      )
+     )
+)
+
+(define let-star-stmt?
+    (lambda (e)
+     (and
+        (list? e)
+        (eq? 'let* (car e))
+        (= (length e) 3)
+        (let-check? (cadr e))
+      )
+     )
+ )
+
+(define REPL
+    (lambda (env)
+        (let* (
+               (d1 (display "cs305> "))
+               (expr (read))
+               (env-new (if (define-expr? expr)
+                            (extend-env (cadr expr) (interpret  (caddr expr) env) env)
+                            env
+                        ))
+               (val (if (define-expr? expr)
+                        (cadr expr)
+                        (interpret expr env)
+                    ))
+               (d2 (display "cs305: "))
+               (d3 (display val))
+               (d4 (newline))
+               (d5 (newline))
+               )
+         (REPL env-new)
+         )
+     )
+ )
+
+(define interpret
+    (lambda (e env)
+    	(cond
+       	((number? e) e)
+        ((symbol? e) (get-value e env env))
+        ((not (list? e)) (display "ERROR\n") (REPL env))
+        ((null? e) e)
+         
+     	((if-stmt? e)
+             (let ((x (interpret (cadr e) env)))
+              (if (= x 0)
+                (interpret (cadddr e) env)
+                (interpret (caddr e) env)
+               )
+              )
+            )
+        
+	((cond-stmt? e)
+             (if (equal? (length e) 3)
+                (if (equal? (interpret (caadr e) env) 0)
+                    (interpret (car (cdaddr e)) env)
+                    (interpret (car (cdadr e)) env))
+                (let ((condition (caadr e))
+                      (then (cadadr e))
+                      (els (cons 'cond (cddr e))))
+                            (let ((res-list (list 'if condition then els))) (interpret res-list env)
+                                             )
+                                   )
+                          )
+        	)
+
+	((let-stmt? e)
+             (let ((varlist (map car (car (cdr e))))
+                   (expretions (map cadr (car (cdr e))))
+                   )
+                (let ((values (map (lambda (ex) (interpret ex env)) expretions)))
+                    (let ((env-new (append (map cons varlist values) env)))
+                        (interpret (caddr e) env-new)
+                     )
+                 )
+              )
+             )
+	((let-star-stmt? e)
+                (if (> (length (cadr e)) 1)
+                    (let ((first-part (list 'let (list (caadr e))))
+                             (last-part (list 'let* (cdadr e) (caddr e)))
+                             )
+                              (let ((temp-list (append first-part (list last-part))))
+                                 (let ((varlist (map car (cadr temp-list)))
+                                       (ins (map cadr (cadr temp-list)))
+                                       )
+                                     (let ((values (map (lambda (i) (interpret i env)) ins)))
+                                      (let ((env-new (append (map cons varlist values) env)))
+                                       (interpret (caddr temp-list) env-new)
+                                       )
+                                      )
+                                  )
+                               )
+                      )
+		(let ((temp-list (list 'let (cadr e) (caddr e))))
+                        (let ((varlist (map car (car (cdr e))))
+                              (expretions (map cadr (car (cdr e))))
+                              )
+                            (let ((values (map (lambda (ex) (interpret ex env)) expretions)))
+                             (let ((env-new (append (map cons varlist values) env)))
+                              (interpret (caddr e) env-new)
+                              )
+                              )
+                        )
+                    )
+                 )
+             )
+ 	(else
+              (let (
+                     (operator (get-operator (car e) env))
+                     (operands (map interpret (cdr e) (make-list (length (cdr e) ) env)))
+                   )
+                   (apply operator operands))
+             )
+        )
+    )
+ )
+
+(define cs305
+    (lambda ()
+        (REPL '())
+     )
+)
